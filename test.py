@@ -199,18 +199,80 @@ def main():
     print("stoi:", stoi)
     print("itos:", itos)
 
-    # collate_fn = make_collate(stoi, MAX_LEN)
-    # train_loader = DataLoader(ds["train"], batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
-    # test_loader = DataLoader(ds["test"], batch_size=BATCH_SIZE, shuffle=False, collate_fn=collate_fn)
+    collate_fn = make_collate(stoi, MAX_LEN)
+    train_loader = DataLoader(ds["train"], batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
+    test_loader = DataLoader(ds["test"], batch_size=BATCH_SIZE, shuffle=False, collate_fn=collate_fn)
 
-    # model = TextRNNClassifier(vocab_size=len(itos), emb_dim=EMB_DIM, hidden_size=HIDDEN_SIZE).to(device)
-    # opt = torch.optim.Adam(model.parameters(), lr=LR)
+    model = TextRNNClassifier(vocab_size=len(itos), emb_dim=EMB_DIM, hidden_size=HIDDEN_SIZE).to(device)
+    opt = torch.optim.Adam(model.parameters(), lr=LR)
 
-    # for epoch in range(1, EPOCHS + 1):
-    #     tr_loss, tr_acc = train_one_epoch(model, train_loader, opt, device)
-    #     te_loss, te_acc = eval_one_epoch(model, test_loader, device)
-    #     print(f"Epoch {epoch}: train loss={tr_loss:.4f} acc={tr_acc:.4f} | test loss={te_loss:.4f} acc={te_acc:.4f}")
+    for epoch in range(1, EPOCHS + 1):
+        tr_loss, tr_acc = train_one_epoch(model, train_loader, opt, device)
+        te_loss, te_acc = eval_one_epoch(model, test_loader, device)
+        print(f"Epoch {epoch}: train loss={tr_loss:.4f} acc={tr_acc:.4f} | test loss={te_loss:.4f} acc={te_acc:.4f}")
 
 
 if __name__ == "__main__":
     main()
+
+
+
+import torch
+import torch.nn as nn
+
+class MyManualRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(MyManualRNN, self).__init__()
+        self.hidden_size = hidden_size
+        
+        # 1. 處理輸入數據的權重 (相當於你的 W_hx)
+        self.i2h = nn.Linear(input_size, hidden_size)
+        
+        # 2. 處理隱藏狀態遞迴的權重 (相當於你的 W_hh)
+        self.h2h = nn.Linear(hidden_size, hidden_size)
+        
+        # 3. 處理輸出的權重 (相當於你的 W_oh)
+        self.h2o = nn.Linear(hidden_size, output_size)
+        
+        self.activation = nn.Tanh() # 經典 RNN 通常用 Tanh
+
+    def forward(self, x, h_prev=None):
+        # x 形狀: (batch, seq_len, input_size)
+        batch_size, seq_len, _ = x.size()
+        
+        # 如果沒有提供初始 h，就初始化為全 0
+        if h_prev is None:
+            h_prev = torch.zeros(batch_size, self.hidden_size).to(x.device)
+        
+        hidden_history = []
+        
+        # 手動走過每一個時間步 (Time Step)
+        for t in range(seq_len):
+            x_t = x[:, t, :]  # 取出當前時間步的資料 (batch, input_size)
+            
+            # RNN 核心公式：h_t = tanh(W_hx*x_t + b_hx + W_hh*h_prev + b_hh)
+            # nn.Linear 內部已經包含了 + bias 的動作
+            h_t = self.activation(self.i2h(x_t) + self.h2h(h_prev))
+            
+            hidden_history.append(h_t)
+            h_prev = h_t # 更新隱藏狀態，傳給下一步
+            
+        # 取最後一步的隱藏狀態來做預測
+        output = self.h2o(h_t)
+        
+        # 為了方便觀察，我們也回傳所有的隱藏狀態
+        return output, torch.stack(hidden_history)
+
+# --- 測試模型 ---
+input_dim = 1
+hidden_dim = 4
+output_dim = 1
+T = 5
+
+model = MyManualRNN(input_dim, hidden_dim, output_dim)
+test_input = torch.randn(1, T, input_dim) # (batch, seq, feature)
+
+out, h_hist = model(test_input)
+
+print(f"最終輸出形狀: {out.shape}")      # torch.Size([1, 1])
+print(f"隱藏層歷史形狀: {h_hist.shape}") # torch.Size([5, 1, 4])
