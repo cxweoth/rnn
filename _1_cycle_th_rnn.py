@@ -3,15 +3,14 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
+from rnn.functions import Linear, Tanh
 from data_gen_by_gesture.data_reader import read_one_circle_data
 
 
 # ---------------------------------------------------------
-# 1. 生成三條 2D sequence
+# 1. generate 3 seqences of 2D data
 # ---------------------------------------------------------
-def generate_teacher_like_data():
-
-    offsets = [(0.01, 0.0), (0.0, 0.0), (-0.01, 0.01)]
+def generate_data(offsets):
 
     base_raw = read_one_circle_data()
 
@@ -30,27 +29,57 @@ def generate_teacher_like_data():
 # 2. 準備資料
 # ---------------------------------------------------------
 num_sequences = 3
-raw_seqs = generate_teacher_like_data()
+offsets = [(0.01, 0.0), (0.0, 0.0), (-0.01, 0.01)]
+raw_seqs = generate_data(offsets)
 
-all_inputs = [torch.from_numpy(s[:-1]).unsqueeze(1) for s in raw_seqs]
-all_targets = [torch.from_numpy(s[1:]).unsqueeze(1) for s in raw_seqs]
-
+all_inputs = [s[:-1][:, np.newaxis] for s in raw_seqs]
+all_targets = [s[1:][:, np.newaxis] for s in raw_seqs]
 
 # ---------------------------------------------------------
 # 3. 2D RNN
 # ---------------------------------------------------------
-class Simple2DRNN(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.rnn = nn.RNN(2, 2, nonlinearity='tanh')
-        self.fc = nn.Linear(2, 2)
+class Simple2DRNN:
 
-        nn.init.xavier_uniform_(self.rnn.weight_ih_l0)
-        nn.init.xavier_uniform_(self.rnn.weight_hh_l0)
+    def __init__(self):
+
+        # input → hidden
+        self.ih = Linear(2, 2)
+
+        # hidden → hidden
+        self.hh = Linear(2, 2, bias=False)
+
+        # activation
+        self.act = Tanh()
+
+        # output layer
+        self.fc = Linear(2, 2)
+
+    def __call__(self, x, h0):
+        return self.forward(x, h0)
 
     def forward(self, x, h0):
-        out, h_final = self.rnn(x, h0)
-        return self.fc(out), h_final
+        """
+        x: list or iterable of tensor, each shape (B, 2)
+           或 shape (T, B, 2) 也可以自己拆
+        h0: tensor shape (B, 2)
+        """
+
+        h = h0
+        outputs = []
+
+        # 如果 x 是 (T, B, 2)，先拆成時間步
+        if hasattr(x, "shape"):
+            T = x.shape[0]
+            x_seq = [x[t] for t in range(T)]
+        else:
+            x_seq = x
+
+        for xt in x_seq:
+            h = self.act(self.ih(xt) + self.hh(h))
+            y = self.fc(h)
+            outputs.append(y)
+
+        return outputs, h
 
 
 model = Simple2DRNN()
@@ -62,7 +91,7 @@ c0_list = nn.ParameterList([
 
 optimizer = optim.Adam(
     list(model.parameters()) + list(c0_list.parameters()),
-    lr=0.0005
+    lr=0.005
 )
 
 criterion = nn.MSELoss()
@@ -73,7 +102,7 @@ criterion = nn.MSELoss()
 # ---------------------------------------------------------
 print("Training 2D RNN...")
 
-for epoch in range(5000):
+for epoch in range(1000):
     total_loss = 0
 
     for i in range(num_sequences):
