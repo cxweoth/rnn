@@ -50,7 +50,7 @@ for seq in raw_seqs:
 # =========================================================
 # 3. Init model
 # =========================================================
-hidden_dim = 16
+hidden_dim = 3
 model = RNN_2D_Customized_Hidden_Space(hidden_dim)
 
 
