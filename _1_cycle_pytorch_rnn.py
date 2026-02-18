@@ -3,34 +3,15 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
-from data_gen_by_gesture.data_reader import read_one_circle_data
+from data_gen.data_reader import read_three_nearby_circle_data
 
-
-# ---------------------------------------------------------
-# 1. 生成三條 2D sequence
-# ---------------------------------------------------------
-def generate_teacher_like_data():
-
-    offsets = [(0.01, 0.0), (0.0, 0.0), (-0.01, 0.01)]
-
-    base_raw = read_one_circle_data()
-
-    base = np.array([[p["x"], p["y"]] for p in base_raw],
-                    dtype=np.float32)
-
-    sequences = []
-    for dx, dy in offsets:
-        shifted = base + np.array([[dx, dy]], dtype=np.float32)
-        sequences.append(shifted)
-
-    return sequences
 
 
 # ---------------------------------------------------------
 # 2. 準備資料
 # ---------------------------------------------------------
 num_sequences = 3
-raw_seqs = generate_teacher_like_data()
+raw_seqs = read_three_nearby_circle_data()
 
 all_inputs = [torch.from_numpy(s[:-1]).unsqueeze(1) for s in raw_seqs]
 all_targets = [torch.from_numpy(s[1:]).unsqueeze(1) for s in raw_seqs]
@@ -39,18 +20,61 @@ all_targets = [torch.from_numpy(s[1:]).unsqueeze(1) for s in raw_seqs]
 # ---------------------------------------------------------
 # 3. 2D RNN
 # ---------------------------------------------------------
+# ---------------------------------------------------------
+# 3. 2D RNN (Manual Linear + Tanh version)
+# ---------------------------------------------------------
 class Simple2DRNN(nn.Module):
+
     def __init__(self):
         super().__init__()
-        self.rnn = nn.RNN(2, 2, nonlinearity='tanh')
+
+        self.W_ih = nn.Linear(2, 2, bias=True)
+        self.W_hh = nn.Linear(2, 2, bias=False)
+
         self.fc = nn.Linear(2, 2)
 
-        nn.init.xavier_uniform_(self.rnn.weight_ih_l0)
-        nn.init.xavier_uniform_(self.rnn.weight_hh_l0)
+        self.tanh = nn.Tanh()
+
+        # match PyTorch nn.RNN initialization
+        nn.init.xavier_uniform_(self.W_ih.weight)
+        nn.init.xavier_uniform_(self.W_hh.weight)
+        nn.init.xavier_uniform_(self.fc.weight)
+
+        nn.init.zeros_(self.W_ih.bias)
+        nn.init.zeros_(self.fc.bias)
+
 
     def forward(self, x, h0):
-        out, h_final = self.rnn(x, h0)
-        return self.fc(out), h_final
+
+        """
+        x shape: (T, batch, 2)
+        h0 shape: (1, batch, 2)
+        """
+
+        T, batch, dim = x.shape
+
+        h = h0[0]   # remove num_layers dim → (batch, 2)
+
+        outputs = []
+
+        for t in range(T):
+
+            x_t = x[t]   # (batch, 2)
+
+            h = self.tanh(
+                self.W_ih(x_t) +
+                self.W_hh(h)
+            )
+
+            y = self.fc(h)
+
+            outputs.append(y)
+
+        out = torch.stack(outputs, dim=0)   # (T, batch, 2)
+
+        h_final = h.unsqueeze(0)   # restore (1, batch, 2)
+
+        return out, h_final
 
 
 model = Simple2DRNN()

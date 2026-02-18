@@ -3,14 +3,15 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
-from rnn.functions import Linear, Tanh
-from data_gen_by_gesture.data_reader import read_one_circle_data
+from data_gen.data_reader import read_one_circle_data
 
 
 # ---------------------------------------------------------
-# 1. generate 3 seqences of 2D data
+# 1. 生成三條 2D sequence
 # ---------------------------------------------------------
-def generate_data(offsets):
+def generate_teacher_like_data():
+
+    offsets = [(0.01, 0.0), (0.0, 0.0), (-0.01, 0.01)]
 
     base_raw = read_one_circle_data()
 
@@ -29,57 +30,70 @@ def generate_data(offsets):
 # 2. 準備資料
 # ---------------------------------------------------------
 num_sequences = 3
-offsets = [(0.01, 0.0), (0.0, 0.0), (-0.01, 0.01)]
-raw_seqs = generate_data(offsets)
+raw_seqs = generate_teacher_like_data()
 
-all_inputs = [s[:-1][:, np.newaxis] for s in raw_seqs]
-all_targets = [s[1:][:, np.newaxis] for s in raw_seqs]
+all_inputs = [torch.from_numpy(s[:-1]).unsqueeze(1) for s in raw_seqs]
+all_targets = [torch.from_numpy(s[1:]).unsqueeze(1) for s in raw_seqs]
+
 
 # ---------------------------------------------------------
 # 3. 2D RNN
 # ---------------------------------------------------------
-class Simple2DRNN:
+# ---------------------------------------------------------
+# 3. 2D RNN (Manual Linear + Tanh version)
+# ---------------------------------------------------------
+class Simple2DRNN(nn.Module):
 
     def __init__(self):
+        super().__init__()
 
-        # input → hidden
-        self.ih = Linear(2, 2)
+        self.W_ih = nn.Linear(2, 2, bias=True)
+        self.W_hh = nn.Linear(2, 2, bias=False)
 
-        # hidden → hidden
-        self.hh = Linear(2, 2, bias=False)
+        self.fc = nn.Linear(2, 2)
 
-        # activation
-        self.act = Tanh()
+        self.tanh = nn.Tanh()
 
-        # output layer
-        self.fc = Linear(2, 2)
+        # match PyTorch nn.RNN initialization
+        nn.init.xavier_uniform_(self.W_ih.weight)
+        nn.init.xavier_uniform_(self.W_hh.weight)
+        nn.init.xavier_uniform_(self.fc.weight)
 
-    def __call__(self, x, h0):
-        return self.forward(x, h0)
+        nn.init.zeros_(self.W_ih.bias)
+        nn.init.zeros_(self.fc.bias)
+
 
     def forward(self, x, h0):
+
         """
-        x: list or iterable of tensor, each shape (B, 2)
-           或 shape (T, B, 2) 也可以自己拆
-        h0: tensor shape (B, 2)
+        x shape: (T, batch, 2)
+        h0 shape: (1, batch, 2)
         """
 
-        h = h0
+        T, batch, dim = x.shape
+
+        h = h0[0]   # remove num_layers dim → (batch, 2)
+
         outputs = []
 
-        # 如果 x 是 (T, B, 2)，先拆成時間步
-        if hasattr(x, "shape"):
-            T = x.shape[0]
-            x_seq = [x[t] for t in range(T)]
-        else:
-            x_seq = x
+        for t in range(T):
 
-        for xt in x_seq:
-            h = self.act(self.ih(xt) + self.hh(h))
+            x_t = x[t]   # (batch, 2)
+
+            h = self.tanh(
+                self.W_ih(x_t) +
+                self.W_hh(h)
+            )
+
             y = self.fc(h)
+
             outputs.append(y)
 
-        return outputs, h
+        out = torch.stack(outputs, dim=0)   # (T, batch, 2)
+
+        h_final = h.unsqueeze(0)   # restore (1, batch, 2)
+
+        return out, h_final
 
 
 model = Simple2DRNN()
@@ -91,7 +105,7 @@ c0_list = nn.ParameterList([
 
 optimizer = optim.Adam(
     list(model.parameters()) + list(c0_list.parameters()),
-    lr=0.005
+    lr=0.0005
 )
 
 criterion = nn.MSELoss()
@@ -102,15 +116,35 @@ criterion = nn.MSELoss()
 # ---------------------------------------------------------
 print("Training 2D RNN...")
 
-for epoch in range(1000):
+for epoch in range(5000):
     total_loss = 0
 
     for i in range(num_sequences):
+
         optimizer.zero_grad()
-        output, _ = model(all_inputs[i], c0_list[i])
+
+        h = c0_list[i]
+        x = all_inputs[i][0:1]
+
+        outputs = []
+
+        for t in range(all_targets[i].shape[0]):
+
+            out, h = model(x, h)
+
+            outputs.append(out)
+
+            # free running
+            x = out.detach()
+
+        output = torch.cat(outputs, dim=0)
+
         loss = criterion(output, all_targets[i])
+
         loss.backward()
+
         optimizer.step()
+
         total_loss += loss.item()
 
     if (epoch+1) % 200 == 0:

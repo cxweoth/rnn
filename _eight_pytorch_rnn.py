@@ -4,7 +4,7 @@ import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 
-from data_gen_by_gesture.data_reader import read_eight_shape_data
+from data_gen.data_reader import read_eight_shape_data
 
 
 # =========================================================

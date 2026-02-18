@@ -4,7 +4,7 @@ import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from data_gen_by_gesture.data_reader import read_one_circle_data
+from data_gen.data_reader import read_one_circle_data
 from data_gen.circle_gen import generate_two_circle_sequence
 
 

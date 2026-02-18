@@ -1,8 +1,30 @@
 import numpy as np
 
 
+# =====================================================
+# HELPER: reverse numpy broadcasting for gradients
+# =====================================================
+
+def _unbroadcast(grad, shape):
+
+    # Remove extra leading dimensions
+    while len(grad.shape) > len(shape):
+        grad = grad.sum(axis=0)
+
+    # Sum axes where original shape was 1
+    for axis, (gdim, sdim) in enumerate(zip(grad.shape, shape)):
+        if sdim == 1 and gdim != 1:
+            grad = grad.sum(axis=axis, keepdims=True)
+
+    return grad
+
+
+# =====================================================
+# TENSOR
+# =====================================================
+
 class tensor:
-    
+
     def __init__(self, data, grad_fn=None, requires_grad=True):
 
         self.data = np.array(data, dtype=np.float32)
@@ -15,7 +37,7 @@ class tensor:
 
 
     # =====================================================
-    # Gradient accumulation (leaf tensors only used by optimizer)
+    # accumulate grad
     # =====================================================
 
     def _accumulate_grad(self, g):
@@ -24,7 +46,6 @@ class tensor:
             return
 
         if self.grad is None:
-
             self.grad = np.zeros_like(self.data)
 
         self.grad += g
@@ -76,32 +97,32 @@ class tensor:
 
     def tanh(self):
 
-        res_data = np.tanh(self.data)
+        out = np.tanh(self.data)
 
         return tensor(
-            res_data,
-            grad_fn=TanhBackward(self, res_data),
+            out,
+            grad_fn=TanhBackward(self, out),
             requires_grad=self.requires_grad
         )
 
 
     def sigmoid(self):
 
-        res_data = 1.0 / (1.0 + np.exp(-self.data))
+        out = 1.0 / (1.0 + np.exp(-self.data))
 
         return tensor(
-            res_data,
-            grad_fn=SigmoidBackward(self, res_data),
+            out,
+            grad_fn=SigmoidBackward(self, out),
             requires_grad=self.requires_grad
         )
 
 
     def relu(self):
 
-        res_data = np.maximum(0.0, self.data)
+        out = np.maximum(0.0, self.data)
 
         return tensor(
-            res_data,
+            out,
             grad_fn=ReLUBackward(self, self.data),
             requires_grad=self.requires_grad
         )
@@ -113,10 +134,10 @@ class tensor:
 
     def mean(self):
 
-        res = self.data.mean()
+        out = self.data.mean()
 
         return tensor(
-            res,
+            out,
             grad_fn=MeanBackward(self, self.data.shape),
             requires_grad=self.requires_grad
         )
@@ -132,14 +153,11 @@ class tensor:
             return
 
         if grad_output is None:
-
             grad_output = np.ones_like(self.data, dtype=np.float32)
-
 
         topo = []
 
         visited = set()
-
 
         def dfs(t):
 
@@ -149,19 +167,14 @@ class tensor:
             visited.add(id(t))
 
             if t.grad_fn is not None:
-
                 for parent in t.grad_fn.parents():
-
                     dfs(parent)
 
             topo.append(t)
 
-
         dfs(self)
 
-
         grads = {id(self): grad_output}
-
 
         for t in reversed(topo):
 
@@ -170,14 +183,10 @@ class tensor:
             if g_out is None:
                 continue
 
-
-            # accumulate gradient
             t._accumulate_grad(g_out)
-
 
             if t.grad_fn is None:
                 continue
-
 
             for parent, grad_parent in t.grad_fn.backward(g_out):
 
@@ -187,12 +196,24 @@ class tensor:
                 pid = id(parent)
 
                 if pid in grads:
-
                     grads[pid] += grad_parent
-
                 else:
-
                     grads[pid] = grad_parent
+
+
+# =====================================================
+# STACK
+# =====================================================
+
+def stack(tensor_list):
+
+    data = np.stack([t.data for t in tensor_list], axis=0)
+
+    return tensor(
+        data,
+        grad_fn=StackBackward(tensor_list),
+        requires_grad=any(t.requires_grad for t in tensor_list)
+    )
 
 
 # =====================================================
@@ -202,95 +223,76 @@ class tensor:
 class AddBackward:
 
     def __init__(self, left, right):
-
         self.left = left
-
         self.right = right
 
-
     def parents(self):
-
         return [self.left, self.right]
-
 
     def backward(self, grad_output):
 
+        grad_left = _unbroadcast(grad_output, self.left.data.shape)
+
+        grad_right = _unbroadcast(grad_output, self.right.data.shape)
+
         return [
-
-            (self.left, grad_output),
-
-            (self.right, grad_output),
-
+            (self.left, grad_left),
+            (self.right, grad_right),
         ]
 
 
 class SubBackward:
 
     def __init__(self, left, right):
-
         self.left = left
-
         self.right = right
 
-
     def parents(self):
-
         return [self.left, self.right]
-
 
     def backward(self, grad_output):
 
+        grad_left = _unbroadcast(grad_output, self.left.data.shape)
+
+        grad_right = _unbroadcast(-grad_output, self.right.data.shape)
+
         return [
-
-            (self.left, grad_output),
-
-            (self.right, -grad_output),
-
+            (self.left, grad_left),
+            (self.right, grad_right),
         ]
 
 
 class MulBackward:
 
     def __init__(self, left, right):
-
         self.left = left
-
         self.right = right
 
-
     def parents(self):
-
         return [self.left, self.right]
-
 
     def backward(self, grad_output):
 
         grad_left = grad_output * self.right.data
-
         grad_right = grad_output * self.left.data
 
+        grad_left = _unbroadcast(grad_left, self.left.data.shape)
+        grad_right = _unbroadcast(grad_right, self.right.data.shape)
+
         return [
-
             (self.left, grad_left),
-
             (self.right, grad_right),
-
         ]
 
 
 class MatMulBackward:
 
     def __init__(self, left, right):
-
         self.left = left
-
         self.right = right
 
-
     def parents(self):
-
         return [self.left, self.right]
-
 
     def backward(self, grad_output):
 
@@ -299,27 +301,19 @@ class MatMulBackward:
         grad_right = self.left.data.T @ grad_output
 
         return [
-
             (self.left, grad_left),
-
             (self.right, grad_right),
-
         ]
 
 
 class TanhBackward:
 
     def __init__(self, parent, out_data):
-
         self.parent = parent
-
         self.out_data = out_data
 
-
     def parents(self):
-
         return [self.parent]
-
 
     def backward(self, grad_output):
 
@@ -331,16 +325,11 @@ class TanhBackward:
 class SigmoidBackward:
 
     def __init__(self, parent, out_data):
-
         self.parent = parent
-
         self.out_data = out_data
 
-
     def parents(self):
-
         return [self.parent]
-
 
     def backward(self, grad_output):
 
@@ -352,16 +341,11 @@ class SigmoidBackward:
 class ReLUBackward:
 
     def __init__(self, parent, input_data):
-
         self.parent = parent
-
         self.input_data = input_data
 
-
     def parents(self):
-
         return [self.parent]
-
 
     def backward(self, grad_output):
 
@@ -375,16 +359,11 @@ class ReLUBackward:
 class MeanBackward:
 
     def __init__(self, parent, original_shape):
-
         self.parent = parent
-
         self.original_shape = original_shape
 
-
     def parents(self):
-
         return [self.parent]
-
 
     def backward(self, grad_output):
 
@@ -393,3 +372,24 @@ class MeanBackward:
         grad = np.ones(self.original_shape, dtype=np.float32) * (grad_output / size)
 
         return [(self.parent, grad)]
+
+
+class StackBackward:
+
+    def __init__(self, parents):
+        self._parents = parents
+
+    def parents(self):
+        return self._parents
+
+    def backward(self, grad_output):
+
+        grads = []
+
+        for i, parent in enumerate(self._parents):
+
+            grad_piece = grad_output[i]
+
+            grads.append((parent, grad_piece))
+
+        return grads
