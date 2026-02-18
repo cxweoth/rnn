@@ -1,6 +1,6 @@
 """
-Docstring for _1_cycle_th_rnn_f
-Descriptions: 1 cycle within free running
+Docstring for _1_cycle_th_rnn_tf
+Descriptions: 1 cycle do teacher at beginning and do free running later
 """
 
 import numpy as np
@@ -12,6 +12,7 @@ from thnn.loss import MSELoss
 from thnn.optimizer import Adam, SGD
 from thnn.utils import rollout_one
 from thnn.rnns import RNN_2D
+
 from fig_utils.draw_utils import draw_direction_arrow
 from data_gen.data_reader import read_three_nearby_circle_data
 
@@ -20,7 +21,7 @@ from data_gen.data_reader import read_three_nearby_circle_data
 # 0. create image folder
 # =========================================================
 
-image_path = os.path.join("images", "_1_circle_3_nearby", "f")
+image_path = os.path.join("images", "_1_circle_3_nearby", "tf")
 os.makedirs(image_path, exist_ok=True)
 
 
@@ -87,37 +88,53 @@ criterion = MSELoss()
 
 
 # =========================================================
-# 6. training loop
+# 6. training loop (HYBRID: teacher forcing → free running)
 # =========================================================
 
-print("Training RNN (correct latent c0 version)...")
+print("Training RNN (hybrid teacher forcing → free running)...")
 
 epochs = 5000
 loss_history = []
+
+# 切換點（例如前 50% teacher forcing，後 50% free running）
+switch_epoch = int(epochs * 0.5)
 
 for epoch in range(epochs):
 
     total_loss = 0.0
 
     for i in range(num_sequences):
-        
-        # 1) compute forward value
-        output, h_final = model(
-            all_inputs[i],
-            c0_list[i],
-            free_run=True
-        )
 
-        # 2) compute loss
+        # decide mode
+        free_run = (epoch >= switch_epoch)
+
+        if not free_run:
+            # -------------------------
+            # Teacher forcing phase
+            # -------------------------
+            output, h_final = model(
+                all_inputs[i],
+                c0_list[i],
+                free_run=False
+            )
+
+        else:
+            # -------------------------
+            # Free running phase
+            # -------------------------
+            output, h_final = model(
+                all_inputs[i],
+                c0_list[i],
+                free_run=True
+            )
+
+        # compute loss
         loss = criterion(output, all_targets[i])
 
-        # 3) init optimizer to zero grad (not true zero, it's none)
         optimizer.zero_grad()
 
-        # 4) do the backward propagation
         loss.backward()
 
-        # 5 update one step
         optimizer.step()
 
         total_loss += float(loss.data)
@@ -126,8 +143,9 @@ for epoch in range(epochs):
 
     loss_history.append(avg_loss)
 
-    if (epoch+1)%200==0:
-        print(f"Epoch {epoch+1}, Loss {avg_loss:.6f}")
+    if (epoch+1) % 200 == 0:
+        mode = "TF" if epoch < switch_epoch else "FR"
+        print(f"Epoch {epoch+1}, Loss {avg_loss:.6f}, Mode={mode}")
 
 
 # =========================================================
@@ -228,6 +246,7 @@ plt.savefig(
 
 plt.close()
 
+
 # =========================================================
 # Plot average loss
 # =========================================================
@@ -250,5 +269,3 @@ plt.savefig(
 )
 
 plt.close()
-
-

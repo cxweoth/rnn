@@ -29,6 +29,22 @@ def read_three_nearby_circle_data():
     return sequences
 
 
+def read_two_seperate_circle_data():
+
+    offsets = [(0.0, 0.0), (0.4, 0.0)]
+
+    base_raw = read_one_circle_data()
+    base = np.array([[p["x"], p["y"]] for p in base_raw],
+                    dtype=np.float32)
+
+    sequences = []
+    for dx, dy in offsets:
+        shifted = base + np.array([[dx, dy]], dtype=np.float32)
+        sequences.append(shifted)
+
+    return sequences
+
+
 def read_one_circle_data():
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -52,7 +68,8 @@ def read_eight_shape_data():
 
     filter_data = raw[100:1500:10]
 
-    return filter_data
+    base = np.array([[p["x"], p["y"]] for p in filter_data], dtype=np.float32)  # (T,2)
+    return [base]
 
 
 

@@ -1,6 +1,6 @@
 """
-Docstring for _1_cycle_th_rnn_f
-Descriptions: 1 cycle within free running
+Docstring for _2_cycle_th_rnn_f
+Descriptions: 2 cycle within free runnning
 """
 
 import numpy as np
@@ -11,16 +11,17 @@ from thnn.tensor import tensor
 from thnn.loss import MSELoss
 from thnn.optimizer import Adam, SGD
 from thnn.utils import rollout_one
-from thnn.rnns import RNN_2D
+from thnn.rnns import RNN_2D_Customized_Hidden_Space
+
 from fig_utils.draw_utils import draw_direction_arrow
-from data_gen.data_reader import read_three_nearby_circle_data
+from data_gen.data_reader import read_two_seperate_circle_data
 
 
 # =========================================================
 # 0. create image folder
 # =========================================================
 
-image_path = os.path.join("images", "_1_circle_3_nearby", "f")
+image_path = os.path.join("images", "_2_circle_seperate", "f")
 os.makedirs(image_path, exist_ok=True)
 
 
@@ -28,7 +29,7 @@ os.makedirs(image_path, exist_ok=True)
 # 1. read three nearby circle data
 # =========================================================
 
-raw_seqs = read_three_nearby_circle_data()
+raw_seqs = read_two_seperate_circle_data()
 
 num_sequences = len(raw_seqs)
 T = raw_seqs[0].shape[0] - 1
@@ -57,7 +58,8 @@ for seq in raw_seqs:
 # 3. Init model
 # =========================================================
 
-model = RNN_2D()
+hidden_dim = 16
+model = RNN_2D_Customized_Hidden_Space(hidden_dim)
 
 # =========================================================
 # 4. learnable initial hidden states
@@ -67,7 +69,7 @@ model = RNN_2D()
 c0_list = [
 
     tensor(
-        np.random.randn(1,1,2).astype(np.float32)*0.1
+        np.random.randn(1,1,hidden_dim).astype(np.float32)*0.1
     )
 
     for _ in range(num_sequences)
@@ -80,17 +82,17 @@ c0_list = [
 
 optimizer = Adam(
     model.parameters()+c0_list, # to learn the c0 initial contexts
-    lr=0.0005
+    lr=0.001
 )
 
 criterion = MSELoss()
 
 
 # =========================================================
-# 6. training loop
+# 6. training loop (FREE RUNNING VERSION)
 # =========================================================
 
-print("Training RNN (correct latent c0 version)...")
+print("Training RNN (free running version)...")
 
 epochs = 5000
 loss_history = []
@@ -100,24 +102,21 @@ for epoch in range(epochs):
     total_loss = 0.0
 
     for i in range(num_sequences):
-        
-        # 1) compute forward value
+
+        # forward (FREE RUNNING)
         output, h_final = model(
             all_inputs[i],
             c0_list[i],
             free_run=True
         )
 
-        # 2) compute loss
+        # loss
         loss = criterion(output, all_targets[i])
 
-        # 3) init optimizer to zero grad (not true zero, it's none)
         optimizer.zero_grad()
 
-        # 4) do the backward propagation
         loss.backward()
 
-        # 5 update one step
         optimizer.step()
 
         total_loss += float(loss.data)
@@ -126,7 +125,7 @@ for epoch in range(epochs):
 
     loss_history.append(avg_loss)
 
-    if (epoch+1)%200==0:
+    if (epoch+1) % 200 == 0:
         print(f"Epoch {epoch+1}, Loss {avg_loss:.6f}")
 
 
@@ -183,14 +182,21 @@ for i in range(num_sequences):
     # -------------------------
     # Hidden Space
     # -------------------------
+    from sklearn.decomposition import PCA
+
+    # project hidden_dim → 2D
+    pca = PCA(n_components=2)
+    states_2d = pca.fit_transform(states)
+
     ax2.plot(
-        states[:,0],
-        states[:,1],
+        states_2d[:,0],
+        states_2d[:,1],
         color=colors[i],
         alpha=0.6,
         label=f"$c_0^{i}$"
     )
-    draw_direction_arrow(ax2, states, colors[i])
+
+    draw_direction_arrow(ax2, states_2d, colors[i])
 
 
 # -------------------------
@@ -228,6 +234,7 @@ plt.savefig(
 
 plt.close()
 
+
 # =========================================================
 # Plot average loss
 # =========================================================
@@ -250,5 +257,3 @@ plt.savefig(
 )
 
 plt.close()
-
-

@@ -4,34 +4,14 @@ import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from data_gen.data_reader import read_one_circle_data
-from data_gen.circle_gen import generate_two_circle_sequence
-
-
-# ---------------------------------------------------------
-# 1. 生成兩條平移圓
-# ---------------------------------------------------------
-def generate_teacher_like_data():
-
-    offsets = [(0.0, 0.0), (0.3, 0.0)]
-
-    base_raw = read_one_circle_data()
-    base = np.array([[p["x"], p["y"]] for p in base_raw],
-                    dtype=np.float32)
-
-    sequences = []
-    for dx, dy in offsets:
-        shifted = base + np.array([[dx, dy]], dtype=np.float32)
-        sequences.append(shifted)
-
-    return sequences
+from data_gen.data_reader import read_two_seperate_circle_data
 
 
 # ---------------------------------------------------------
 # 2. 準備資料
 # ---------------------------------------------------------
-num_sequences = 2
-raw_seqs = generate_two_circle_sequence()
+raw_seqs = read_two_seperate_circle_data()
+num_sequences = len(raw_seqs)
 
 all_inputs = [torch.from_numpy(s[:-1]).unsqueeze(1) for s in raw_seqs]
 all_targets = [torch.from_numpy(s[1:]).unsqueeze(1) for s in raw_seqs]
@@ -73,31 +53,57 @@ criterion = nn.MSELoss()
 # ---------------------------------------------------------
 # 4. Free-running rollout training
 # ---------------------------------------------------------
-def rollout_loss(x_seq, y_seq, h0):
+def rollout_loss(x_seq, y_seq, h0, teacher_forcing_ratio=0.5):
+
     T = x_seq.shape[0]
+
     h = h0
+
     x = x_seq[0:1]
+
     loss = 0
 
     for t in range(T):
+
         out, h = model.forward_step(x, h)
+
         loss += criterion(out, y_seq[t:t+1])
-        x = out.detach()
+
+        # hybrid input selection
+        if np.random.rand() < teacher_forcing_ratio:
+            x = x_seq[t:t+1]     # teacher forcing
+        else:
+            x = out.detach()     # free running
 
     return loss
 
 
 print("Training...")
+all_epoch = 10000
+for epoch in range(all_epoch):
 
-for epoch in range(4000):
     total_loss = 0
 
+    # gradually reduce teacher forcing
+    teacher_forcing_ratio = max(0.8 * (1 - epoch/all_epoch), 0.1)
+
     for i in range(num_sequences):
+
         optimizer.zero_grad()
-        loss = rollout_loss(all_inputs[i], all_targets[i], c0_list[i])
+
+        loss = rollout_loss(
+            all_inputs[i],
+            all_targets[i],
+            c0_list[i],
+            teacher_forcing_ratio
+        )
+
         loss.backward()
+
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
         optimizer.step()
+
         total_loss += loss.item()
 
     if (epoch+1) % 500 == 0:

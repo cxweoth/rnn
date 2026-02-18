@@ -10,13 +10,8 @@ from data_gen.data_reader import read_eight_shape_data
 # =========================================================
 # 1) Data
 # =========================================================
-def generate_data():
-    base_raw = read_eight_shape_data()
-    base = np.array([[p["x"], p["y"]] for p in base_raw], dtype=np.float32)  # (T,2)
-    return [base]  # num_sequences = 1
 
-
-raw_seqs = generate_data()
+raw_seqs = read_eight_shape_data()
 num_sequences = len(raw_seqs)
 
 # Convert to torch: input is x_t, target is x_{t+1}

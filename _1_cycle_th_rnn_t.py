@@ -1,6 +1,6 @@
 """
-Docstring for _1_cycle_th_rnn_f
-Descriptions: 1 cycle within free running
+Docstring for _1_cycle_th_rnn_r
+Descriptions: 1 cycle within teacher
 """
 
 import numpy as np
@@ -12,6 +12,7 @@ from thnn.loss import MSELoss
 from thnn.optimizer import Adam, SGD
 from thnn.utils import rollout_one
 from thnn.rnns import RNN_2D
+
 from fig_utils.draw_utils import draw_direction_arrow
 from data_gen.data_reader import read_three_nearby_circle_data
 
@@ -20,7 +21,7 @@ from data_gen.data_reader import read_three_nearby_circle_data
 # 0. create image folder
 # =========================================================
 
-image_path = os.path.join("images", "_1_circle_3_nearby", "f")
+image_path = os.path.join("images", "_1_circle_3_nearby", "t")
 os.makedirs(image_path, exist_ok=True)
 
 
@@ -102,11 +103,7 @@ for epoch in range(epochs):
     for i in range(num_sequences):
         
         # 1) compute forward value
-        output, h_final = model(
-            all_inputs[i],
-            c0_list[i],
-            free_run=True
-        )
+        output, h_final = model(all_inputs[i], c0_list[i])
 
         # 2) compute loss
         loss = criterion(output, all_targets[i])
@@ -228,6 +225,7 @@ plt.savefig(
 
 plt.close()
 
+
 # =========================================================
 # Plot average loss
 # =========================================================
@@ -250,5 +248,3 @@ plt.savefig(
 )
 
 plt.close()
-
-
