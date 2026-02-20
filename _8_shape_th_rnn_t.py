@@ -1,6 +1,6 @@
 """
-Docstring for _2_cycle_th_rnn_f
-Descriptions: 2 cycle within free runnning
+Docstring for _8_shape_th_rnn_t
+Descriptions: 8 shape within teacher 
 """
 
 import numpy as np
@@ -14,14 +14,14 @@ from thnn.utils import rollout_one
 from thnn.rnns import RNN_2D_Customized_Hidden_Space
 
 from fig_utils.draw_utils import draw_direction_arrow
-from data_gen.data_reader import read_two_seperate_circle_data
+from data_gen.data_reader import read_eight_shape_data
 
 
 # =========================================================
 # 0. create image folder
 # =========================================================
 
-image_path = os.path.join("images", "_2_circle_seperate", "f")
+image_path = os.path.join("images", "_8_shape", "t")
 os.makedirs(image_path, exist_ok=True)
 
 
@@ -29,7 +29,7 @@ os.makedirs(image_path, exist_ok=True)
 # 1. read three nearby circle data
 # =========================================================
 
-raw_seqs = read_two_seperate_circle_data()
+raw_seqs = read_eight_shape_data()
 
 num_sequences = len(raw_seqs)
 T = raw_seqs[0].shape[0] - 1
@@ -89,10 +89,10 @@ criterion = MSELoss()
 
 
 # =========================================================
-# 6. training loop (FREE RUNNING VERSION)
+# 6. training loop
 # =========================================================
 
-print("Training RNN (free running version)...")
+print("Training RNN (correct latent c0 version)...")
 
 epochs = 20000
 loss_history = []
@@ -102,21 +102,20 @@ for epoch in range(epochs):
     total_loss = 0.0
 
     for i in range(num_sequences):
+        
+        # 1) compute forward value
+        output, h_final = model(all_inputs[i], c0_list[i])
 
-        # forward (FREE RUNNING)
-        output, h_final = model(
-            all_inputs[i],
-            c0_list[i],
-            free_run=True
-        )
-
-        # loss
+        # 2) compute loss
         loss = criterion(output, all_targets[i])
 
+        # 3) init optimizer to zero grad (not true zero, it's none)
         optimizer.zero_grad()
 
+        # 4) do the backward propagation
         loss.backward()
 
+        # 5 update one step
         optimizer.step()
 
         total_loss += float(loss.data)
@@ -125,7 +124,7 @@ for epoch in range(epochs):
 
     loss_history.append(avg_loss)
 
-    if (epoch+1) % 200 == 0:
+    if (epoch+1)%200==0:
         print(f"Epoch {epoch+1}, Loss {avg_loss:.6f}")
 
 
@@ -218,8 +217,8 @@ ax1.grid(True, linestyle='--', alpha=0.5)
 ax1.legend()
 
 ax2.set_title("Internal State Space ($c^1$ vs $c^0$)")
-ax2.set_xlabel("PC1")
-ax2.set_ylabel("PC2")
+ax2.set_xlabel("$c^0$")
+ax2.set_ylabel("$c^1$")
 ax2.axis('equal')
 ax2.grid(True, linestyle='--', alpha=0.5)
 ax2.legend()

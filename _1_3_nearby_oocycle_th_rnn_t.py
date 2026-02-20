@@ -1,6 +1,6 @@
 """
-Docstring for _1_cycle_th_rnn_r
-Descriptions: 1 cycle within teacher
+Docstring for _1_3_nearby_oocycle_th_rnn_t
+Descriptions: 3 nearby cycle within teacher forcing and one opposite trajectory
 """
 
 import numpy as np
@@ -14,14 +14,14 @@ from thnn.utils import rollout_one
 from thnn.rnns import RNN_2D
 
 from fig_utils.draw_utils import draw_direction_arrow
-from data_gen.data_reader import read_three_nearby_circle_data
+from data_gen.data_reader import read_three_nearby_circle_one_opposite_data
 
 
 # =========================================================
 # 0. create image folder
 # =========================================================
 
-image_path = os.path.join("images", "_1_circle_3_nearby", "t")
+image_path = os.path.join("images", "_1_3_nearby_oocycle", "t")
 os.makedirs(image_path, exist_ok=True)
 
 
@@ -29,7 +29,7 @@ os.makedirs(image_path, exist_ok=True)
 # 1. read three nearby circle data
 # =========================================================
 
-raw_seqs = read_three_nearby_circle_data()
+raw_seqs = read_three_nearby_circle_one_opposite_data()
 
 num_sequences = len(raw_seqs)
 T = raw_seqs[0].shape[0] - 1

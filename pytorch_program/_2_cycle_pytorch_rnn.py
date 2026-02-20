@@ -13,8 +13,8 @@ from data_gen.data_reader import read_two_seperate_circle_data
 raw_seqs = read_two_seperate_circle_data()
 num_sequences = len(raw_seqs)
 
-all_inputs = [torch.from_numpy(s[:-1]).unsqueeze(1) for s in raw_seqs]
-all_targets = [torch.from_numpy(s[1:]).unsqueeze(1) for s in raw_seqs]
+all_inputs = [torch.from_numpy(s[:-1].copy()).unsqueeze(1) for s in raw_seqs]
+all_targets = [torch.from_numpy(s[1:].copy()).unsqueeze(1) for s in raw_seqs]
 
 
 # ---------------------------------------------------------
@@ -34,7 +34,7 @@ class Simple2DRNN(nn.Module):
         return self.fc(out), h
 
 
-hidden_dim = 16
+hidden_dim = 3
 model = Simple2DRNN(hidden_dim)
 
 c0_list = nn.ParameterList([

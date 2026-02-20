@@ -58,7 +58,7 @@ for seq in raw_seqs:
 # 3. Init model
 # =========================================================
 
-hidden_dim = 16
+hidden_dim = 3
 model = RNN_2D_Customized_Hidden_Space(hidden_dim)
 
 # =========================================================
@@ -80,9 +80,9 @@ c0_list = [
 # 5. optimizer and loss
 # =========================================================
 
-optimizer = Adam(
+optimizer = SGD(
     model.parameters()+c0_list, # to learn the c0 initial contexts
-    lr=0.0005
+    lr=0.01
 )
 
 criterion = MSELoss()
@@ -94,7 +94,7 @@ criterion = MSELoss()
 
 print("Training RNN (correct latent c0 version)...")
 
-epochs = 5000
+epochs = 20000
 loss_history = []
 
 for epoch in range(epochs):
@@ -217,8 +217,8 @@ ax1.grid(True, linestyle='--', alpha=0.5)
 ax1.legend()
 
 ax2.set_title("Internal State Space ($c^1$ vs $c^0$)")
-ax2.set_xlabel("$c^0$")
-ax2.set_ylabel("$c^1$")
+ax2.set_xlabel("PC1")
+ax2.set_ylabel("PC2")
 ax2.axis('equal')
 ax2.grid(True, linestyle='--', alpha=0.5)
 ax2.legend()

@@ -1,6 +1,6 @@
 """
-Docstring for _2_cycle_th_rnn_f
-Descriptions: 2 cycle within free runnning
+Docstring for _1_3_nearby_cycle_th_rnn_f
+Descriptions: 3 nearby cycle within free running
 """
 
 import numpy as np
@@ -12,16 +12,15 @@ from thnn.loss import MSELoss
 from thnn.optimizer import Adam, SGD
 from thnn.utils import rollout_one
 from thnn.rnns import RNN_2D_Customized_Hidden_Space
-
 from fig_utils.draw_utils import draw_direction_arrow
-from data_gen.data_reader import read_two_seperate_circle_data
+from data_gen.data_reader import read_three_nearby_circle_data
 
 
 # =========================================================
 # 0. create image folder
 # =========================================================
 
-image_path = os.path.join("images", "_2_circle_seperate", "f")
+image_path = os.path.join("images", "_1_3_nearby_cycle", "f")
 os.makedirs(image_path, exist_ok=True)
 
 
@@ -29,7 +28,7 @@ os.makedirs(image_path, exist_ok=True)
 # 1. read three nearby circle data
 # =========================================================
 
-raw_seqs = read_two_seperate_circle_data()
+raw_seqs = read_three_nearby_circle_data()
 
 num_sequences = len(raw_seqs)
 T = raw_seqs[0].shape[0] - 1
@@ -58,7 +57,7 @@ for seq in raw_seqs:
 # 3. Init model
 # =========================================================
 
-hidden_dim = 3
+hidden_dim = 8
 model = RNN_2D_Customized_Hidden_Space(hidden_dim)
 
 # =========================================================
@@ -80,9 +79,9 @@ c0_list = [
 # 5. optimizer and loss
 # =========================================================
 
-optimizer = SGD(
+optimizer = Adam(
     model.parameters()+c0_list, # to learn the c0 initial contexts
-    lr=0.01
+    lr=0.003
 )
 
 criterion = MSELoss()
@@ -94,7 +93,7 @@ criterion = MSELoss()
 
 print("Training RNN (free running version)...")
 
-epochs = 20000
+epochs = 10000
 loss_history = []
 
 for epoch in range(epochs):
@@ -217,7 +216,7 @@ ax1.axis('equal')
 ax1.grid(True, linestyle='--', alpha=0.5)
 ax1.legend()
 
-ax2.set_title("Internal State Space ($c^1$ vs $c^0$)")
+ax2.set_title("Hidden State Space (PCA)")
 ax2.set_xlabel("PC1")
 ax2.set_ylabel("PC2")
 ax2.axis('equal')

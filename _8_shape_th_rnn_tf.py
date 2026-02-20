@@ -9,7 +9,7 @@ import os
 
 from thnn.tensor import tensor
 from thnn.loss import MSELoss
-from thnn.optimizer import Adam
+from thnn.optimizer import Adam, SGD
 from thnn.utils import rollout_one, clip_grad_norm
 from thnn.rnns import RNN_2D_Customized_Hidden_Space
 
@@ -66,9 +66,9 @@ c0_list = [
 # =========================================================
 # 5. optimizer and loss
 # =========================================================
-optimizer = Adam(
+optimizer = SGD(
     model.parameters() + c0_list,
-    lr=0.003
+    lr=0.01
 )
 
 criterion = MSELoss()
@@ -79,7 +79,7 @@ criterion = MSELoss()
 # =========================================================
 print("Training RNN (hybrid teacher forcing + free running)...")
 
-epochs = 10000
+epochs = 20000
 loss_history = []
 
 

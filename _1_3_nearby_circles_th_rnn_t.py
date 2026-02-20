@@ -1,6 +1,6 @@
 """
-Docstring for _2_cycle_th_rnn_f
-Descriptions: 2 cycle within free runnning
+Docstring for _1_3_nearby_cycle_th_rnn_t
+Descriptions: 3 nearby cycle within teacher forcing
 """
 
 import numpy as np
@@ -14,14 +14,14 @@ from thnn.utils import rollout_one
 from thnn.rnns import RNN_2D_Customized_Hidden_Space
 
 from fig_utils.draw_utils import draw_direction_arrow
-from data_gen.data_reader import read_two_seperate_circle_data
+from data_gen.data_reader import read_three_true_circles_sequence
 
 
 # =========================================================
 # 0. create image folder
 # =========================================================
 
-image_path = os.path.join("images", "_2_circle_seperate", "f")
+image_path = os.path.join("images", "_1_3_nearby_three_true_circles", "t")
 os.makedirs(image_path, exist_ok=True)
 
 
@@ -29,7 +29,7 @@ os.makedirs(image_path, exist_ok=True)
 # 1. read three nearby circle data
 # =========================================================
 
-raw_seqs = read_two_seperate_circle_data()
+raw_seqs = read_three_true_circles_sequence()
 
 num_sequences = len(raw_seqs)
 T = raw_seqs[0].shape[0] - 1
@@ -58,7 +58,7 @@ for seq in raw_seqs:
 # 3. Init model
 # =========================================================
 
-hidden_dim = 3
+hidden_dim = 2
 model = RNN_2D_Customized_Hidden_Space(hidden_dim)
 
 # =========================================================
@@ -82,19 +82,19 @@ c0_list = [
 
 optimizer = SGD(
     model.parameters()+c0_list, # to learn the c0 initial contexts
-    lr=0.01
+    lr=0.003
 )
 
 criterion = MSELoss()
 
 
 # =========================================================
-# 6. training loop (FREE RUNNING VERSION)
+# 6. training loop
 # =========================================================
 
-print("Training RNN (free running version)...")
+print("Training RNN (correct latent c0 version)...")
 
-epochs = 20000
+epochs = 5000
 loss_history = []
 
 for epoch in range(epochs):
@@ -102,21 +102,20 @@ for epoch in range(epochs):
     total_loss = 0.0
 
     for i in range(num_sequences):
+        
+        # 1) compute forward value
+        output, h_final = model(all_inputs[i], c0_list[i])
 
-        # forward (FREE RUNNING)
-        output, h_final = model(
-            all_inputs[i],
-            c0_list[i],
-            free_run=True
-        )
-
-        # loss
+        # 2) compute loss
         loss = criterion(output, all_targets[i])
 
+        # 3) init optimizer to zero grad (not true zero, it's none)
         optimizer.zero_grad()
 
+        # 4) do the backward propagation
         loss.backward()
 
+        # 5 update one step
         optimizer.step()
 
         total_loss += float(loss.data)
@@ -125,7 +124,7 @@ for epoch in range(epochs):
 
     loss_history.append(avg_loss)
 
-    if (epoch+1) % 200 == 0:
+    if (epoch+1)%200==0:
         print(f"Epoch {epoch+1}, Loss {avg_loss:.6f}")
 
 
@@ -182,21 +181,14 @@ for i in range(num_sequences):
     # -------------------------
     # Hidden Space
     # -------------------------
-    from sklearn.decomposition import PCA
-
-    # project hidden_dim → 2D
-    pca = PCA(n_components=2)
-    states_2d = pca.fit_transform(states)
-
     ax2.plot(
-        states_2d[:,0],
-        states_2d[:,1],
+        states[:,0],
+        states[:,1],
         color=colors[i],
         alpha=0.6,
         label=f"$c_0^{i}$"
     )
-
-    draw_direction_arrow(ax2, states_2d, colors[i])
+    draw_direction_arrow(ax2, states, colors[i])
 
 
 # -------------------------
@@ -218,8 +210,8 @@ ax1.grid(True, linestyle='--', alpha=0.5)
 ax1.legend()
 
 ax2.set_title("Internal State Space ($c^1$ vs $c^0$)")
-ax2.set_xlabel("PC1")
-ax2.set_ylabel("PC2")
+ax2.set_xlabel("$c^0$")
+ax2.set_ylabel("$c^1$")
 ax2.axis('equal')
 ax2.grid(True, linestyle='--', alpha=0.5)
 ax2.legend()
