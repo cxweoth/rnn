@@ -66,7 +66,7 @@ c0_list = [
 # =========================================================
 # 5. optimizer and loss
 # =========================================================
-optimizer = Adam(
+optimizer = SGD(
     model.parameters() + c0_list,
     lr=0.003
 )

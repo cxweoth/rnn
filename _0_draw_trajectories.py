@@ -12,6 +12,8 @@ _3_nearby_raw_data = read_three_nearby_circle_data()
 _2_seperate_raw_data = read_two_seperate_circle_data()
 _8_shape_raw_data = read_eight_shape_data()
 
+print(len(_8_shape_raw_data[0]))
+
 plt.figure(figsize=(18, 5))
 
 ax0 = plt.subplot(1, 3, 1)
