@@ -9,7 +9,7 @@ import os
 
 from thnn.tensor import tensor
 from thnn.loss import MSELoss
-from thnn.optimizer import Adam, SGD
+from thnn.optimizer import Adam, SGD, SGD_Momentum
 from thnn.utils import rollout_one, clip_grad_norm
 from thnn.rnns import RNN_2D_Customized_Hidden_Space
 
@@ -66,9 +66,9 @@ c0_list = [
 # =========================================================
 # 5. optimizer and loss
 # =========================================================
-optimizer = SGD(
+optimizer = Adam(
     model.parameters() + c0_list,
-    lr=0.01
+    lr=0.003
 )
 
 criterion = MSELoss()
