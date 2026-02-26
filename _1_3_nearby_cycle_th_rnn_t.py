@@ -94,7 +94,7 @@ criterion = MSELoss()
 
 print("Training RNN (correct latent c0 version)...")
 
-epochs = 10000
+epochs = 200
 loss_history = []
 
 for epoch in range(epochs):
@@ -181,21 +181,71 @@ for i in range(num_sequences):
     # -------------------------
     # Hidden Space
     # -------------------------
-    from sklearn.decomposition import PCA
 
-    # project hidden_dim → 2D
-    pca = PCA(n_components=2)
-    states_2d = pca.fit_transform(states)
+    hd = states.shape[1]
 
-    ax2.plot(
-        states_2d[:,0],
-        states_2d[:,1],
-        color=colors[i],
-        alpha=0.6,
-        label=f"$c_0^{i}$"
-    )
+    # ===== 1D =====
+    if hd == 1:
 
-    draw_direction_arrow(ax2, states_2d, colors[i])
+        dummy = np.column_stack([
+            states[:,0],
+            np.zeros_like(states[:,0])
+        ])
+
+        ax2.plot(
+            dummy[:,0],
+            dummy[:,1],
+            color=colors[i],
+            alpha=0.6,
+            label=f"$c_0^{i}$"
+        )
+
+        draw_direction_arrow(ax2, dummy, colors[i])
+
+    # ===== 2D =====
+    elif hd == 2:
+
+        ax2.plot(
+            states[:,0],
+            states[:,1],
+            color=colors[i],
+            alpha=0.6,
+            label=f"$c_0^{i}$"
+        )
+
+        draw_direction_arrow(ax2, states, colors[i])
+
+    # ===== 3D =====
+    elif hd == 3:
+
+        ax2.plot(
+            states[:,0],
+            states[:,1],
+            states[:,2],
+            color=colors[i],
+            alpha=0.6,
+            label=f"$c_0^{i}$"
+        )
+
+        draw_direction_arrow(ax2, states, colors[i])
+
+    # ===== >=4D → PCA =====
+    else:
+
+        from sklearn.decomposition import PCA
+
+        pca = PCA(n_components=2)
+        states_2d = pca.fit_transform(states)
+
+        ax2.plot(
+            states_2d[:,0],
+            states_2d[:,1],
+            color=colors[i],
+            alpha=0.6,
+            label=f"$c_0^{i}$"
+        )
+
+        draw_direction_arrow(ax2, states_2d, colors[i])
 
 
 # -------------------------
@@ -216,13 +266,30 @@ ax1.axis('equal')
 ax1.grid(True, linestyle='--', alpha=0.5)
 ax1.legend()
 
-ax2.set_title("Internal State Space ($c^1$ vs $c^0$)")
-ax2.set_xlabel("$c^0$")
-ax2.set_ylabel("$c^1$")
-ax2.axis('equal')
+ax2.set_title("Internal State Space")
+
+if hidden_dim == 1:
+    ax2.set_xlabel("$c^0$")
+    ax2.set_ylabel("(dummy)")
+
+elif hidden_dim == 2:
+    ax2.set_xlabel("$c^0$")
+    ax2.set_ylabel("$c^1$")
+
+elif hidden_dim == 3:
+    ax2.set_xlabel("$c^0$")
+    ax2.set_ylabel("$c^1$")
+    ax2.set_zlabel("$c^2$")
+
+else:
+    ax2.set_xlabel("PC1")
+    ax2.set_ylabel("PC2")
+
+if hidden_dim != 3:
+    ax2.axis('equal')
+
 ax2.grid(True, linestyle='--', alpha=0.5)
 ax2.legend()
-
 
 plt.tight_layout()
 

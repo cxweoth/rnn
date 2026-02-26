@@ -50,7 +50,7 @@ for seq in raw_seqs:
 # =========================================================
 # 3. Init model
 # =========================================================
-hidden_dim = 4
+hidden_dim = 3
 model = RNN_2D_Customized_Hidden_Space(hidden_dim)
 
 
@@ -66,7 +66,7 @@ c0_list = [
 # =========================================================
 # 5. optimizer and loss
 # =========================================================
-optimizer = SGD(
+optimizer = Adam(
     model.parameters() + c0_list,
     lr=0.003
 )
@@ -152,19 +152,43 @@ for epoch in range(epochs):
     if (epoch + 1) % 200 == 0:
         print(f"Epoch {epoch+1}, Loss {avg_loss:.6f}, TF_ratio={teacher_forcing_ratio:.3f}")
 
+import json
+
+state_dict = model.state_dict()
+
+dict_path = os.path.join(image_path, "state_dict.json")
+
+c0_serializable = [
+    c0.data.tolist()
+    for c0 in c0_list
+]
+
+state_dict["c0_list"] = c0_serializable
+
+with open(dict_path, "w") as f:
+    json.dump(state_dict, f, indent=4)
+
+print(f"State dict saved to {dict_path}")
 
 # =========================================================
 # 7. rollout and plot (SAVE ONLY, NO SHOW)
 # =========================================================
-plt.figure(figsize=(18, 5))
 
-ax0 = plt.subplot(1, 3, 1)
-ax1 = plt.subplot(1, 3, 2)
-ax2 = plt.subplot(1, 3, 3)
+plt.figure(figsize=(18,5))
+
+ax0 = plt.subplot(1,3,1)
+ax1 = plt.subplot(1,3,2)
+
+if hidden_dim == 3:
+    ax2 = plt.subplot(1,3,3, projection='3d')
+else:
+    ax2 = plt.subplot(1,3,3)
 
 colors = ['#0072E3', '#FF00FF', '#FF0000']
 
+
 for i in range(num_sequences):
+
     raw_data = raw_seqs[i]
 
     preds, states = rollout_one(
@@ -178,47 +202,102 @@ for i in range(num_sequences):
     # Teacher
     # -------------------------
     ax0.plot(
-        raw_data[:, 0],
-        raw_data[:, 1],
+        raw_data[:,0],
+        raw_data[:,1],
         color=colors[i],
         alpha=0.7,
         label=f"$raw^{i}$"
     )
     draw_direction_arrow(ax0, raw_data, colors[i])
 
+
     # -------------------------
     # Output Space
     # -------------------------
     ax1.plot(
-        preds[:, 0],
-        preds[:, 1],
+        preds[:,0],
+        preds[:,1],
         color=colors[i],
         alpha=0.7,
         label=f"$c_0^{i}$"
     )
     draw_direction_arrow(ax1, preds, colors[i])
 
+
     # -------------------------
     # Hidden Space
     # -------------------------
-    from sklearn.decomposition import PCA
 
-    pca = PCA(n_components=2)
-    states_2d = pca.fit_transform(states)
+    hd = states.shape[1]
 
-    ax2.plot(
-        states_2d[:, 0],
-        states_2d[:, 1],
-        color=colors[i],
-        alpha=0.6,
-        label=f"$c_0^{i}$"
-    )
-    draw_direction_arrow(ax2, states_2d, colors[i])
+    # ===== 1D =====
+    if hd == 1:
+
+        dummy = np.column_stack([
+            states[:,0],
+            np.zeros_like(states[:,0])
+        ])
+
+        ax2.plot(
+            dummy[:,0],
+            dummy[:,1],
+            color=colors[i],
+            alpha=0.6,
+            label=f"$c_0^{i}$"
+        )
+
+        draw_direction_arrow(ax2, dummy, colors[i])
+
+    # ===== 2D =====
+    elif hd == 2:
+
+        ax2.plot(
+            states[:,0],
+            states[:,1],
+            color=colors[i],
+            alpha=0.6,
+            label=f"$c_0^{i}$"
+        )
+
+        draw_direction_arrow(ax2, states, colors[i])
+
+    # ===== 3D =====
+    elif hd == 3:
+
+        ax2.plot(
+            states[:,0],
+            states[:,1],
+            states[:,2],
+            color=colors[i],
+            alpha=0.6,
+            label=f"$c_0^{i}$"
+        )
+
+        draw_direction_arrow(ax2, states, colors[i])
+
+    # ===== >=4D → PCA =====
+    else:
+
+        from sklearn.decomposition import PCA
+
+        pca = PCA(n_components=2)
+        states_2d = pca.fit_transform(states)
+
+        ax2.plot(
+            states_2d[:,0],
+            states_2d[:,1],
+            color=colors[i],
+            alpha=0.6,
+            label=f"$c_0^{i}$"
+        )
+
+        draw_direction_arrow(ax2, states_2d, colors[i])
 
 
 # -------------------------
 # Formatting
 # -------------------------
+
 ax0.set_title("True Trajectory")
 ax0.set_xlabel("$x^0$")
 ax0.set_ylabel("$x^1$")
@@ -233,27 +312,60 @@ ax1.axis('equal')
 ax1.grid(True, linestyle='--', alpha=0.5)
 ax1.legend()
 
-ax2.set_title("Hidden State Space (PCA)")
-ax2.set_xlabel("PC1")
-ax2.set_ylabel("PC2")
-ax2.axis('equal')
+ax2.set_title("Internal State Space")
+
+if hidden_dim == 1:
+    ax2.set_xlabel("$c^0$")
+    ax2.set_ylabel("(dummy)")
+
+elif hidden_dim == 2:
+    ax2.set_xlabel("$c^0$")
+    ax2.set_ylabel("$c^1$")
+
+elif hidden_dim == 3:
+    ax2.set_xlabel("$c^0$")
+    ax2.set_ylabel("$c^1$")
+    ax2.set_zlabel("$c^2$")
+
+else:
+    ax2.set_xlabel("PC1")
+    ax2.set_ylabel("PC2")
+
+if hidden_dim != 3:
+    ax2.axis('equal')
+
 ax2.grid(True, linestyle='--', alpha=0.5)
 ax2.legend()
 
 plt.tight_layout()
-plt.savefig(os.path.join(image_path, "trajectories.png"), dpi=300)
+
+plt.savefig(
+    os.path.join(image_path, "trajectories.png"),
+    dpi=300
+)
+
 plt.close()
 
 
 # =========================================================
 # Plot average loss
 # =========================================================
-plt.figure(figsize=(6, 4))
+
+plt.figure(figsize=(6,4))
+
 plt.plot(loss_history, color="#0072E3", linewidth=2)
+
 plt.title("Average Loss vs Epoch")
 plt.xlabel("Epoch")
 plt.ylabel("Average Loss")
+
 plt.grid(True, linestyle='--', alpha=0.5)
+
 plt.tight_layout()
-plt.savefig(os.path.join(image_path, "loss_curve.png"), dpi=300)
+
+plt.savefig(
+    os.path.join(image_path, "loss_curve.png"),
+    dpi=300
+)
+
 plt.close()

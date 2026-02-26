@@ -55,11 +55,36 @@ class tensor:
         )
 
     def __mul__(self, other):
-        return tensor(
-            self.data * other.data,
-            grad_fn=MulBackward(self, other),
-            requires_grad=self.requires_grad or other.requires_grad
-        )
+
+        # -------------------------
+        # tensor * tensor
+        # -------------------------
+        if isinstance(other, tensor):
+
+            return tensor(
+                self.data * other.data,
+                grad_fn=MulBackward(self, other),
+                requires_grad=self.requires_grad or other.requires_grad
+            )
+
+        # -------------------------
+        # tensor * scalar
+        # -------------------------
+        else:
+
+            other_tensor = tensor(
+                np.array(other, dtype=np.float32),
+                requires_grad=False
+            )
+
+            return tensor(
+                self.data * other_tensor.data,
+                grad_fn=MulBackward(self, other_tensor),
+                requires_grad=self.requires_grad
+            )
+        
+    def __rmul__(self, other):
+        return self.__mul__(other)
 
     def __matmul__(self, other):
         return tensor(

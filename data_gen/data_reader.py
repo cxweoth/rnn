@@ -70,6 +70,28 @@ def read_three_nearby_circle_one_opposite_data():
 
     return sequences
 
+def read_two_nearby_circle_data():
+
+    offsets = [(0.0, 0.0), (-0.5, -0.01)]
+
+    base_raw = read_one_circle_data()
+    base = np.array([[p["x"], p["y"]] for p in base_raw],
+                    dtype=np.float32)
+
+    sequences = []
+
+    for i in range(len(offsets)):
+        dx, dy = offsets[i]
+        shifted = base + np.array([[dx, dy]], dtype=np.float32)
+
+        if i == 1:
+            # 左右鏡射（對 y 軸）
+            shifted[:, 0] = -shifted[:, 0]
+
+        sequences.append(shifted)
+
+    return sequences
+
 def read_two_seperate_circle_data():
 
     offsets = [(0.0, 0.0), (0.4, 0.0)]
